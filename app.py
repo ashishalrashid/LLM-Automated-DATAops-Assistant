@@ -13,6 +13,7 @@ import pandas as pd
 import subprocess
 import sys
 import shlex
+import sqlite3
 from dateutil.parser import parse
 import subprocess
 import json
@@ -363,59 +364,24 @@ def llm_find_similar_comments_using_embedding_model(input_file, output_file):
         f.write(best_pair[0] + "\n" + best_pair[1])
 
 #A10 extract and excute sql query
-def llm_find_similar_comments_using_embedding_model(input_file, output_file):
-    input_file = make_relative_path(input_file)
-    output_file = make_relative_path(output_file)
-    # Read comments (ignoring empty lines)
-    with open(input_file, "r", encoding="utf-8") as f:
-        comments = [line.strip() for line in f if line.strip()]
+def execute_sql_query(db_file, sql_query, output_file):
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
     
-    if len(comments) < 2:
-        raise ValueError("Need at least two comments to compare similarity.")
+    cursor.execute(sql_query)
+    result = cursor.fetchall()
     
-    # Build the payload using the "input" field with the list of comments.
-    payload = {
-        "model": "text-embedding-3-small",
-        "input": comments
-    }
+    conn.close()
+
+    if len(result) == 1 and len(result[0]) == 1:
+        output = str(result[0][0])
+    else:
+        output = "\n".join(str(row) for row in result)
     
-    # Proxy endpoint for embeddings (ensure 'headers' is defined globally)
-    url1 = "https://aiproxy.sanand.workers.dev/openai/v1/embeddings"
-    
-    response = requests.post(url1, headers=headers, json=payload)
-    response.raise_for_status()
-    data = response.json()
-    
-    # Expecting a response like: {"data": [ { "embedding": [...] }, ... ]}
-    if "data" not in data:
-        raise ValueError("No data returned in response.")
-    
-    embeddings = [item.get("embedding") for item in data["data"]]
-    
-    if len(embeddings) != len(comments):
-        raise ValueError("The number of embeddings does not match the number of comments.")
-    
-    embeddings = np.array(embeddings)
-    
-    # Define cosine similarity function.
-    def cosine_similarity(a, b):
-        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-    
-    max_similarity = -1.0
-    best_pair = (None, None)
-    n = len(embeddings)
-    
-    # Find the pair with the highest cosine similarity.
-    for i in range(n):
-        for j in range(i + 1, n):
-            sim = cosine_similarity(embeddings[i], embeddings[j])
-            if sim > max_similarity:
-                max_similarity = sim
-                best_pair = (comments[i], comments[j])
-    
-    # Write the most similar pair of comments to the output file, one per line.
+    # Write the result to the output file.
     with open(output_file, "w", encoding="utf-8") as f:
-        f.write(best_pair[0] + "\n" + best_pair[1])
+        f.write(output)
+
 
 
 
@@ -675,101 +641,108 @@ function_list = [ {
 }
 ]
 
-def process_task(task):
-    
-    response = requests.post(
-    url=url,
-    headers=headers,
-    json={
-        "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": "You are an expert Python programmer"},
-            {"role": "user", "content": task}
-        ],
-        "tools": function_list,
-        "tool_choice": "auto"
-    }
-    )   
+def process_task(task):  
+    global url
+    global headers
+    global function_list
+    try:
+        response = requests.post(
+            url=url,
+            headers=headers,
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": "You are an expert Python programmer"},
+                    {"role": "user", "content": task}
+                ],
+                "tools": function_list,
+                "tool_choice": "auto"
+            }
+        )
+        response.raise_for_status()
+        arguments_str = response.json()['choices'][0]['message']['tool_calls'][0]['function']['arguments']
+        parsed_arguments = json.loads(arguments_str)
 
-    arguments_str = response.json()['choices'][0]['message']['tool_calls'][0]['function']['arguments']
-    parsed_arguments = json.loads(arguments_str)
+        print("parsed args:",parsed_arguments)
+        function_name=response.json()['choices'][0]['message']['tool_calls'][0]['function']['name']
 
-    print("parsed args:",parsed_arguments)
-    function_name=response.json()['choices'][0]['message']['tool_calls'][0]['function']['name']
+        if function_name == "execute_generated_code":
+            code=parsed_arguments['code']
+            arguments = parsed_arguments.get('arguments', None)
+            output=execute_generated_code(code, arguments)
+            print(output)
 
-    if function_name == "execute_generated_code":
-        code=parsed_arguments['code']
-        arguments = parsed_arguments.get('arguments', None)
-        output=execute_generated_code(code, arguments)
-        print(output)
+        if function_name=="run_npx_package":
+            package=parsed_arguments['package']
+            arg=parsed_arguments.get('arg', None)
+            run_npx_package(package, arg)
 
-    if function_name=="run_npx_package":
-        package=parsed_arguments['package']
-        arg=parsed_arguments.get('arg', None)
-        run_npx_package(package, arg)
+        if function_name=="count_day_occurrence":
+            input_file=parsed_arguments['input_file']
+            output_file=parsed_arguments['output_file']
+            day=parsed_arguments['day']
+            count_day_occurrences(input_file, output_file, day)
 
-    if function_name=="count_day_occurrence":
-        input_file=parsed_arguments['input_file']
-        output_file=parsed_arguments['output_file']
-        day=parsed_arguments['day']
-        count_day_occurrences(input_file, output_file, day)
+        if function_name=="sort_json_file":
+            input_file=parsed_arguments['input_file']
+            output_file=parsed_arguments['output_file']
+            sort_keys=parsed_arguments['sort_keys']
+            sort_json_file(input_file, output_file, sort_keys)
 
-    if function_name=="sort_json_file":
-        input_file=parsed_arguments['input_file']
-        output_file=parsed_arguments['output_file']
-        sort_keys=parsed_arguments['sort_keys']
-        sort_json_file(input_file, output_file, sort_keys)
+        if function_name=="write_recent_file_lines":
+            file_dir=parsed_arguments['file_dir']
+            output_file=parsed_arguments['output_file']
+            no_of_files=parsed_arguments['no_of_files']
+            line_number=parsed_arguments['line_number']
+            file_extension=parsed_arguments['file_extension']
+            write_recent_file_lines(file_dir, output_file, no_of_files, line_number, file_extension)
 
-    if function_name=="write_recent_file_lines":
-        file_dir=parsed_arguments['file_dir']
-        output_file=parsed_arguments['output_file']
-        no_of_files=parsed_arguments['no_of_files']
-        line_number=parsed_arguments['line_number']
-        file_extension=parsed_arguments['file_extension']
-        write_recent_file_lines(file_dir, output_file, no_of_files, line_number, file_extension)
+        if function_name=="run_download_from_script":
+            url=parsed_arguments['url']
+            user_email=parsed_arguments.get('user_email', None)
+            args=parsed_arguments.get('args', None)
+            run_download_from_script(url, user_email, *args)
 
-    if function_name=="run_download_from_script":
-        url=parsed_arguments['url']
-        user_email=parsed_arguments.get('user_email', None)
-        args=parsed_arguments.get('args', None)
-        run_download_from_script(url, user_email, *args)
+        if function_name=="create_markdown_index":
+            input_directory=parsed_arguments['input_directory']
+            output_index_file=parsed_arguments['output_index_file']
+            occurrence=parsed_arguments.get('occurrence', 1)
+            create_markdown_index(input_directory, output_index_file, 1)
 
-    if function_name=="create_markdown_index":
-        input_directory=parsed_arguments['input_directory']
-        output_index_file=parsed_arguments['output_index_file']
-        occurrence=parsed_arguments.get('occurrence', 1)
-        create_markdown_index(input_directory, output_index_file, 1)
+        if function_name=="llm_text_extractor":
+            input_file=parsed_arguments['input_file']
+            output_file=parsed_arguments['output_file']
+            model=parsed_arguments.get('model', 'gpt-4o-mini')
+            prompt_instructions=parsed_arguments['prompt_instructions']
+            llm_text_extractor(input_file, output_file, prompt_instructions)
 
-    if function_name=="llm_text_extractor":
-        input_file=parsed_arguments['input_file']
-        output_file=parsed_arguments['output_file']
-        model=parsed_arguments.get('model', 'gpt-4o-mini')
-        prompt_instructions=parsed_arguments['prompt_instructions']
-        llm_text_extractor(input_file, output_file, prompt_instructions)
+        if function_name == "llm_image_extractor":
+            input_file = parsed_arguments['input_file']
+            output_file = parsed_arguments['output_file']
+            prompt_instructions = parsed_arguments['prompt_instructions']
+            llm_image_extractor(input_file, output_file, prompt_instructions)
 
-    if function_name == "llm_image_extractor":
-        input_file = parsed_arguments['input_file']
-        output_file = parsed_arguments['output_file']
-        prompt_instructions = parsed_arguments['prompt_instructions']
-        llm_image_extractor(input_file, output_file, prompt_instructions)
+        if function_name == "llm_find_similar_comments_using_embedding_model":
+            input_file = parsed_arguments['input_file']
+            output_file = parsed_arguments['output_file']
+            llm_find_similar_comments_using_embedding_model(input_file, output_file)
+        return "success"
 
-    if function_name == "llm_find_similar_comments_using_embedding_model":
-        input_file = parsed_arguments['input_file']
-        output_file = parsed_arguments['output_file']
-        llm_find_similar_comments_using_embedding_model(input_file, output_file)
-
-    if function_name == "execute_sql_query":
-        db_file = parsed_arguments['db_file']
-        sql_query = parsed_arguments['sql_query']
-        output_file = parsed_arguments['output_file']
-        execute_sql_query(db_file, sql_query, output_file)
+    except requests.exceptions.HTTPError as http_err:
+        print("HTTP error occurred:", http_err)
+        print("Response text:", response.text)
+        return {"error": f"HTTP error occurred: {http_err}"}
+    except Exception as err:
+        print("Other error occurred:", err)
+        return {"error": f"Other error occurred: {err}"}
 
 
 
 ##########################################################################################################################################
 
 
-@app.post("/run")
+# @app.post("/run")
+@app.get("/run")
 async def run_task(task: str = Query(...)):
     try:
         result = process_task(task)
@@ -777,7 +750,7 @@ async def run_task(task: str = Query(...)):
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception:
-        raise HTTPException(status_code=500, detail="Internal error")
+        raise HTTPException(status_code=500, detail="Internal err")
 
 @app.get("/read", response_class=PlainTextResponse)
 async def read_file(path: str = Query(...)):
