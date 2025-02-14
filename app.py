@@ -726,7 +726,7 @@ def process_task(task):
             input_file = parsed_arguments['input_file']
             output_file = parsed_arguments['output_file']
             llm_find_similar_comments_using_embedding_model(input_file, output_file)
-        return "success"
+        return ("Sucess",parsed_arguments)
 
     except requests.exceptions.HTTPError as http_err:
         print("HTTP error occurred:", http_err)
@@ -741,8 +741,9 @@ def process_task(task):
 ##########################################################################################################################################
 
 
-# @app.post("/run")
-@app.get("/run")
+
+
+@app.post("/run")
 async def run_task(task: str = Query(...)):
     try:
         result = process_task(task)
@@ -754,6 +755,7 @@ async def run_task(task: str = Query(...)):
 
 @app.get("/read", response_class=PlainTextResponse)
 async def read_file(path: str = Query(...)):
+    path = make_relative_path(path)
     try:
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
