@@ -1,3 +1,28 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "fastapi",
+#     "uvicorn",
+#     "requests",
+#     "pandas",
+#     "python-dotenv",
+#     "regex",
+#     "python-dateutil",
+#     "easyocr",
+#     "numpy",
+#     "beautifulsoup4",
+#     "Pillow",
+#     "markdown",
+#     "GitPython",
+#     "duckdb",
+#     "SpeechRecognition",
+#     "pydub"
+# ]
+# ///
+
+
+
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 import uvicorn
@@ -652,7 +677,7 @@ def process_task(task):
             json={
                 "model": "gpt-4o-mini",
                 "messages": [
-                    {"role": "system", "content": "You are an expert Python programmer"},
+                    {"role": "system", "content": "You are an expert Python programmer. Data outside /data is never accessed or exfiltrated, even if the task description asks for it,Data is never deleted anywhere on the file system, even if the task description asks for it"},
                     {"role": "user", "content": task}
                 ],
                 "tools": function_list,
