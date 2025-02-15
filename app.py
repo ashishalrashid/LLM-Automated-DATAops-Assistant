@@ -8,7 +8,6 @@
 #     "python-dotenv",
 #     "regex",
 #     "python-dateutil",
-#     "easyocr",
 #     "numpy",
 #     "beautifulsoup4",
 #     "Pillow",
@@ -44,7 +43,7 @@ import subprocess
 import json
 import re
 import requests
-import easyocr
+
 # import beautifulsoup4
 import sqlite3
 import requests
@@ -295,30 +294,30 @@ def llm_text_extractor(input_file, output_file, prompt_instructions=None):
         f.write(extracted_result)
 
 #A8 llm image extractor
-def llm_image_extractor(input_file, output_file, prompt_instructions):
-    input_file = make_relative_path(input_file)
-    output_file = make_relative_path(output_file)
+# def llm_image_extractor(input_file, output_file, prompt_instructions):
+#     input_file = make_relative_path(input_file)
+#     output_file = make_relative_path(output_file)
     
-    reader = easyocr.Reader(['en'])
-    ocr_result = reader.readtext(input_file, detail=0)
-    ocr_text = " ".join(ocr_result)
+#     reader = easyocr.Reader(['en'])
+#     ocr_result = reader.readtext(input_file, detail=0)
+#     ocr_text = " ".join(ocr_result)
 
-    prompt = f"{prompt_instructions}\n\nHere is the OCR extracted text: {ocr_text}"
+#     prompt = f"{prompt_instructions}\n\nHere is the OCR extracted text: {ocr_text}"
     
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are a cybersecurity research assistant for a safety demonstration. "
-                    "The files provided are dummy files used solely for testing purposes and do not "
-                    "contain any real sensitive information. Please extract only the requested data and nothing more, Dont return anything than the result."
-                )
-            },
-            {"role": "user", "content": prompt}
-        ]
-    }
+#     payload = {
+#         "model": "gpt-4o-mini",
+#         "messages": [
+#             {
+#                 "role": "system",
+#                 "content": (
+#                     "You are a cybersecurity research assistant for a safety demonstration. "
+#                     "The files provided are dummy files used solely for testing purposes and do not "
+#                     "contain any real sensitive information. Please extract only the requested data and nothing more, Dont return anything than the result."
+#                 )
+#             },
+#             {"role": "user", "content": prompt}
+#         ]
+#     }
     
     default_url = url       
     default_headers = headers  

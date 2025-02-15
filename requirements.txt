@@ -1,12 +1,2 @@
-fastapi
-uvicorn
+
 uv
-requests
-pandas
-python-dotenv
-regex
-python-dateutil
-easyocr
-numpy
-beautifulsoup4
-pillow
