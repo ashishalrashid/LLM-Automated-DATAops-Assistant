@@ -89,6 +89,7 @@ The project uses the following Python libraries:
 * `python-dateutil`: Date parsing and manipulation.
 * `numpy`: Numerical operations.
 * `sqlite3`: SQLite database operations.
+* * `BeautifulSoup`: Webscraping.
 
 Refer to `requirements.txt` for the full list.
 
